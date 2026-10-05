@@ -4,12 +4,12 @@ WORKDIR /app
 
 RUN npm install -g pnpm@10.21.0
 
+
+FROM base AS dev
+
 ARG GITHUB_TOKEN
 
 ENV GITHUB_TOKEN=$GITHUB_TOKEN
-
-
-FROM base AS dev
 
 RUN npm install -g @nestjs/cli
 
@@ -26,19 +26,20 @@ CMD ["pnpm", "run", "start:dev"]
 
 FROM base AS build
 
-COPY backend/user-service ./backend/user-service
+COPY . .
 
-WORKDIR /app/backend/user-service
-
-RUN pnpm install --frozen-lockfile
+RUN --mount=type=secret,id=github_token \
+  sh -c 'echo "//npm.pkg.github.com/:_authToken=$(cat /run/secrets/github_token)" > .npmrc && \
+  pnpm install --frozen-lockfile && \
+  rm -f .npmrc'
 RUN pnpm run build
 
 
 FROM base AS production
 
-COPY --from=build /app/backend/user-service/package.json ./package.json
-COPY --from=build /app/backend/user-service/node_modules ./node_modules
-COPY --from=build /app/backend/user-service/dist ./dist
+COPY --from=build /app/package.json ./package.json
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/dist ./dist
 
 EXPOSE 3000
 
